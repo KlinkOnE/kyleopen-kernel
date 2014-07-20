@@ -220,7 +220,7 @@ void cfg80211_bss_expire_all(struct cfg80211_registered_device *dev)
 	struct cfg80211_internal_bss *bss, *tmp;
 	bool expired = false;
 
-	printk(KERN_DEBUG "%s() Enter - Steven\n", __func__);
+	printk(KERN_DEBUG "%s() Enter\n", __func__);
 
 	list_for_each_entry_safe(bss, tmp, &dev->bss_list, list) {
 		__cfg80211_unlink_bss(dev, bss);

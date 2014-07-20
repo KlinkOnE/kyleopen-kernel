@@ -635,8 +635,9 @@ static void hscd_early_resume(struct early_suspend *handler)
 {
 	struct hscd_i2c_data *hscd_data;
 	hscd_data = container_of(handler, struct hscd_i2c_data, early_suspend);
-
+	#if !defined(CONFIG_MACH_KYLE)
 	pr_info("%s\n", __func__);
+	#endif
 
 	hscd_resume(hscd_data->this_client);
 }

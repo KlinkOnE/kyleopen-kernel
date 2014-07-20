@@ -397,9 +397,10 @@ int set_freq_limit(unsigned long id, unsigned int freq)
 	/* update */
 	set_min_lock(min);
 	set_max_lock(max);
-
+	#if !defined(CONFIG_MACH_KYLE)
 	pr_info("%s: 0x%x %d, min %d, max %d\n",
 				__func__, id, freq, min, max);
+	#endif
 
 	/* need to update now */
 	if (id & UPDATE_NOW_BITS) {

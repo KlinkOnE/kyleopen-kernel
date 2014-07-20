@@ -20,6 +20,15 @@
 
 #include "rtc-core.h"
 
+#if defined(CONFIG_MACH_KYLE) || defined(CONFIG_MACH_KYLE_I)
+#define ADJUST_KERNEL_TIME
+#endif
+
+#ifdef ADJUST_KERNEL_TIME
+#define RTC_WORK_CHECK_TIMEOUT (30 * 60 * HZ)
+static int rtc_work_check();
+static DECLARE_DELAYED_WORK(rtc_work, rtc_work_check);
+#endif
 
 static DEFINE_IDR(rtc_idr);
 static DEFINE_MUTEX(idr_lock);
@@ -90,6 +99,10 @@ static int rtc_resume(struct device *dev)
 	if (strcmp(dev_name(&rtc->dev), CONFIG_RTC_HCTOSYS_DEVICE) != 0)
 		return 0;
 
+#if defined(CONFIG_MACH_KYLE) || defined(CONFIG_MACH_KYLE_I) || defined(CONFIG_MACH_KYLE_CHN)
+	printk("%s [RTC] ==================================== \n", __func__);
+#endif
+
 	/* snapshot the current rtc and system time at resume */
 	getnstimeofday(&new_system);
 	rtc_read_time(rtc, &tm);
@@ -120,12 +133,74 @@ static int rtc_resume(struct device *dev)
 			timespec_sub(new_system, old_system));
 
 	timekeeping_inject_sleeptime(&sleep_time);
+
+#ifdef ADJUST_KERNEL_TIME
+	schedule_delayed_work(&rtc_work, RTC_WORK_CHECK_TIMEOUT);
+#endif
+
+#if defined(CONFIG_MACH_KYLE) || defined(CONFIG_MACH_KYLE_I) || defined(CONFIG_MACH_KYLE_CHN)
+	printk("%s [RTC] sleep_time = %ld \n", __func__,sleep_time.tv_sec);
+	printk("%s [RTC] time now = %ld\n", __func__,new_rtc.tv_sec);
+	printk("%s [RTC] ==================================== \n", __func__);
+#endif
+
 	return 0;
 }
+
+#ifdef ADJUST_KERNEL_TIME
+static int rtc_work_check()
+{
+	struct device *dev;
+	struct rtc_device *rtc = NULL;
+	struct timespec		ktime, adjust_ktime;
+	struct timespec		check_delta;
+	struct rtc_time		tm;
+	struct timespec		rtime;
+
+	printk(KERN_ERR "%s\n", __func__);
+
+	rtc = rtc_class_open(CONFIG_RTC_HCTOSYS_DEVICE);
+
+	if (rtc!=NULL){
+		getnstimeofday(&ktime);					// kernel_time
+		rtc_read_time(rtc, &tm);
+		rtc_tm_to_time(&tm, &rtime.tv_sec);		// rtc_time
+		rtc_tm_to_time(&tm, &adjust_ktime.tv_sec);
+		
+		/* RTC precision is 1 second; adjust delta for avg 1/2 sec err */
+		set_normalized_timespec(&check_delta, ktime.tv_sec - rtime.tv_sec, ktime.tv_nsec - (NSEC_PER_SEC >> 1));
+
+		printk(KERN_ERR "%s: 1 k_t: %10d\n", __func__, ktime.tv_sec);
+		printk(KERN_ERR "%s: 2 r_t: %10d\n", __func__, rtime.tv_sec);
+		printk(KERN_ERR "%s: 3 check_delta   s: %3d, s: %10d \n", __func__, check_delta.tv_sec, check_delta.tv_nsec);
+		printk(KERN_ERR "%s: 4 old_delta   s: %3d, s: %10d \n", __func__, old_delta.tv_sec, old_delta.tv_nsec);
+
+		if(abs(check_delta.tv_sec) >= 3)
+		{
+			adjust_ktime.tv_nsec = 0;
+			do_settimeofday(&adjust_ktime);
+
+			rtc_read_time(rtc, &tm);		//request by QC
+			
+			getnstimeofday(&adjust_ktime);
+			printk(KERN_ERR "%s: 5 adjust k time is set as: %10d\n", __func__, adjust_ktime.tv_sec);
+
+			set_normalized_timespec(&old_delta, adjust_ktime.tv_sec - rtime.tv_sec, adjust_ktime.tv_nsec - (NSEC_PER_SEC >> 1));
+			printk(KERN_ERR "%s: 5 re-set delta,  s:%3d, n:%10d\n", __func__, old_delta.tv_sec,old_delta.tv_nsec);
+		}
+	}else{
+		printk(KERN_ERR "%s: rtc_dev isn't rtc0, \n", __func__);
+
+	}
+	schedule_delayed_work(&rtc_work, RTC_WORK_CHECK_TIMEOUT);
+	return 0;
+}
+#endif
 
 #else
 #define rtc_suspend	NULL
 #define rtc_resume	NULL
+#define rtc_work_check NULL
 #endif
 
 
@@ -269,6 +344,10 @@ static int __init rtc_init(void)
 	rtc_class->resume = rtc_resume;
 	rtc_dev_init();
 	rtc_sysfs_init(rtc_class);
+
+#ifdef ADJUST_KERNEL_TIME
+	schedule_delayed_work(&rtc_work, RTC_WORK_CHECK_TIMEOUT);
+#endif
 	return 0;
 }
 

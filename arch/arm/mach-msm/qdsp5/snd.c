@@ -210,13 +210,13 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		vmsg.args.device = cpu_to_be32(vol.device);
 		vmsg.args.method = cpu_to_be32(vol.method);
 		if (vol.method != SND_METHOD_VOICE) {
-#if defined(CONFIG_MACH_KYLE_CHN) || defined(CONFIG_MACH_KYLE_I)
+#if defined(CONFIG_MACH_KYLE_HKTW) || defined(CONFIG_MACH_KYLE_CHN) || defined(CONFIG_MACH_KYLE_I)
 			if (vol.method != SND_METHOD_MIDI){
 #endif				
 			MM_ERR("set volume: invalid method\n");
 			rc = -EINVAL;
 			break;
-#if defined(CONFIG_MACH_KYLE_CHN) || defined(CONFIG_MACH_KYLE_I)
+#if defined(CONFIG_MACH_KYLE_HKTW) || defined(CONFIG_MACH_KYLE_CHN) || defined(CONFIG_MACH_KYLE_I)
 				}
 #endif				
 		}
@@ -517,13 +517,13 @@ static long snd_vol_enable(const char *arg)
 	vmsg.args.device = cpu_to_be32(vol.device);
 	vmsg.args.method = cpu_to_be32(vol.method);
 		if (vol.method != SND_METHOD_VOICE) {
-#if defined(CONFIG_MACH_KYLE_CHN) || defined(CONFIG_MACH_KYLE_I)
+#if defined(CONFIG_MACH_KYLE_HKTW) || defined(CONFIG_MACH_KYLE_CHN) || defined(CONFIG_MACH_KYLE_I)
 			if (vol.method != SND_METHOD_MIDI){
 #endif						
 			MM_ERR("snd_ioctl set volume: invalid method\n");
 			rc = -EINVAL;
 			return rc;
-#if defined(CONFIG_MACH_KYLE_CHN) || defined(CONFIG_MACH_KYLE_I)			
+#if defined(CONFIG_MACH_KYLE_HKTW) || defined(CONFIG_MACH_KYLE_CHN) || defined(CONFIG_MACH_KYLE_I)			
 			}
 #endif	
 		}

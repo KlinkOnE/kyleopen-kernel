@@ -1751,8 +1751,17 @@ static void msm_pm_power_off(void)
 {
 	unsigned long flags;
 	unsigned int power_off_reason;
+	unsigned size = 0;
+ 	samsung_vendor1_id *smem_vendor1 = \
+		(samsung_vendor1_id *)smem_get_entry(SMEM_ID_VENDOR1, &size);	
 
 	printk(KERN_INFO " %s\n", __func__);
+   
+    if (smem_vendor1) {
+    	smem_vendor1->AP_reserved[0] = 0;
+    } else {
+    	printk(KERN_EMERG "smem_flag is NULL\n");
+    }
 
 	msm_rpcrouter_close();
 
@@ -1783,6 +1792,7 @@ static void msm_pm_restart(char str, const char *cmd)
 	if (smem_vendor1) {
 		smem_vendor1->silent_reset = 0xAEAEAEAE;
 		smem_vendor1->reboot_reason = restart_reason;
+		smem_vendor1->AP_reserved[0] = 0;	// for sudden reset ramdump mode
 	} else {
 		printk(KERN_EMERG "smem_flag is NULL\n");
 	}

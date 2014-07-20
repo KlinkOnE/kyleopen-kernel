@@ -497,10 +497,16 @@ static void max17048_work(struct work_struct *work)
 
 	max17048_get_vcell(chip->client);
 	max17048_get_soc(chip->client);
+
+	#if !defined(CONFIG_MACH_KYLE)
 	pr_info("%s : VCELL:%dmV, AVGVCELL:%dmV\n", __func__,
 		chip->vcell / 1000, chip->avgvcell / 1000);
+	#endif
+
+	#if !defined(CONFIG_MACH_KYLE)
 	pr_info("%s : Raw SOC:%d%%, SOC:%d%%\n", __func__,
 		chip->raw_soc, chip->soc);
+	#endif
 	pr_info("%s : CONFIG:0x%04x, RATE:0x%04x\n", __func__,
 		max17048_read_word(chip->client, max17048_RCOMP_MSB),
 		max17048_read_word(chip->client, 0x16));

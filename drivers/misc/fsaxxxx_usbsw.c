@@ -362,10 +362,13 @@ static ssize_t fsa_show_usb_state(struct device *dev,
 	struct fsausb_info *usbsw = dev_get_drvdata(dev);
 	struct i2c_client *client = usbsw->client;
 	u8 dev1, dev2;
-
+	#if !defined(CONFIG_MACH_KYLE)
 	printk(KERN_ERR "%s\n", __func__);
+	#endif
 #if defined(CONFIG_MACH_KYLE)
+	#if !defined(CONFIG_MACH_KYLE)
 	printk(KERN_ERR "%s: usb_state: %d\n", __func__, usb_state_flag);
+	#endif
 	if (usb_state_flag == 1)
 		return snprintf(buf, 22, "USB_STATE_CONFIGURED\n");
 

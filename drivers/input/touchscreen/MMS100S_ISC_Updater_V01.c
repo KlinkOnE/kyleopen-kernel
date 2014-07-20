@@ -11,7 +11,9 @@
 #include "MMS100S_ISC_Updater.h"
 
 #ifdef CONFIG_MACH_KYLE_I
-#include <KYLE_I_R03_VA18.c>
+#include <KYLE_I_R03_VA19.c>
+#define TSP_SET_COMP	0x03
+#define TSP_SET_VERSION	0x19
 #else
 #include "KYLE_CORE28_PR_31_VC05.c"
 #endif
@@ -35,6 +37,9 @@ bool exception_condition = false;
 #define SET_COMPATIBILITY_ADDR	0x4C09
 #define FIRMWARE_VERSION_ADDR	0x1D
 #define SET_VERSION_ADDR	0x4C08
+#define PANEL_TYPE_ADDR					0x1F
+#define CRC_DONE_ADDR						0xB1
+#define CRC_ADDR							0xB2
 #define READ_RETRY_CNT 3
 
 /*
@@ -45,16 +50,25 @@ bool exception_condition = false;
 
 #define MFS_DEFAULT_SLAVE_ADDR	0x48
 
+#define G1M_V34_CRC	0
+#define G1F_V22_CRC	151
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2
+#define G2_VA1_CRC	142
+#endif
+
 static eMFSRet_t enter_ISC_mode(void);
+eMFSRet_t get_tsp_compatibility(unsigned char* tspcomp);
 static eMFSRet_t check_module_compatibility(const unsigned char *_pBinary_Data);
-static eMFSRet_t check_firmware_version(const unsigned char *_pBinary_Data);
-static eMFSRet_t check_module_type(void);
+static eMFSRet_t check_firmware_version(bool only_read, const unsigned char *_pBinary_Data);
+eMFSRet_t check_panel_type(unsigned char* paneltype);
+eMFSRet_t get_main_compatibility(const unsigned char *_pBinary_Data, unsigned char* maincomp);
 eMFSRet_t MFS_ISC_force_update(void);
-eMFSRet_t check_firmware_version_resume(void);
 
 static int firmware_write(const unsigned char *_pBinary_Data);
 static int firmware_verify(const unsigned char *_pBinary_Data);
 static int mass_erase(void);
+unsigned char* buf;
+
 extern int melfas_fw_i2c_write(char *buf, int length);
 extern int melfas_fw_i2c_read(u16 addr, u8 *value, u16 length);
 extern int melfas_fw_i2c_read_without_addr(u8 *value, u16 length);
@@ -63,240 +77,213 @@ extern int melfas_fw_i2c_busrt_write(u8 *value, u16 length);
 unsigned char TSP_PanelVersion, TSP_PhoneVersion;
 eMFSRet_t MFS_ISC_update(void)
 {
+	extern void ts_power_enable(int en);
 	eMFSRet_t ret;
-	unsigned char moduleComp;
-	unsigned char read_buffer;
+	unsigned char paneltype, tspcomp, setcomp, redownload = 0;
 	int i;
 	MFS_I2C_set_slave_addr(mfs_i2c_slave_addr);
 
+ENTRANCE:
+
+	MFS_ms_delay(50);
+
 #ifdef CONFIG_MACH_KYLE_I
-	ret = check_firmware_version(MELFAS_binary);
-	printk(KERN_ERR "<MELFAS> TSP_PanelVersion=%x\n", TSP_PanelVersion);
-	printk(KERN_ERR "<MELFAS> TSP_PhoneVersion=%x\n", TSP_PhoneVersion);
+	buf =& MELFAS_binary;
+#else
+	ret= check_panel_type(&paneltype);
+	if (ret != MRET_SUCCESS && !redownload)
+	{
+		MFS_TSP_reboot();
+		if (mass_erase() != MRET_SUCCESS)
+			goto MFS_ISC_UPDATE_FINISH;
+
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2
+		if (firmware_write(G2_BINARY) != MRET_SUCCESS)
+			goto MFS_ISC_UPDATE_FINISH;			
+#else
+		if (firmware_write(G1F_BINARY) != MRET_SUCCESS)
+			goto MFS_ISC_UPDATE_FINISH;
 #endif
 
-/*
-	melfas_fw_i2c_read(MODULE_COMPATIBILITY_ADDR, &read_buffer, 1);
-	IC_type = read_buffer;
-	printk(KERN_ERR "<MELFAS> Module Compatibility IC_type=%x\n",
-		IC_type);
-*/
-#ifndef CONFIG_MACH_KYLE_I
-	for (i = 0; i < READ_RETRY_CNT; i++) {
-		ret = check_module_type();
-		if (ret != MRET_SUCCESS) 
-			MFS_ms_delay(50);
-		else
-			break;
-	}
-	printk(KERN_ERR "<MELFAS> IC_type is =%x!!!\n\n", IC_type);
-	if (ret != MRET_SUCCESS) {
-		MFS_ISC_force_update();
-		ret = check_module_type();
-		}
-#endif		
-	if (IC_type == 0x0F || IC_type == 0x52) {
-		ret = check_module_compatibility(MELFAS_binary_G1F);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_UPDATE_FINISH;
-
-		ret = check_firmware_version(MELFAS_binary_G1F);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_UPDATE_FINISH;
-
 		MFS_TSP_reboot();
-
-		ret = mass_erase();
-		if (ret != MRET_SUCCESS)
+		if (enter_ISC_mode() != MRET_SUCCESS)
 			goto MFS_ISC_UPDATE_FINISH;
 
-		ret = firmware_write(MELFAS_binary_G1F);
-		if (ret != MRET_SUCCESS)
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2
+		if (firmware_verify(G2_BINARY) != MRET_SUCCESS)
 			goto MFS_ISC_UPDATE_FINISH;
-
-		MFS_TSP_reboot();
-		printk(KERN_ERR "<MELFAS> TOUCH IC REBOOT!!!\n");
-
-		ret = enter_ISC_mode();
-		if (ret != MRET_SUCCESS)
+#else
+		if (firmware_verify(G1F_BINARY) != MRET_SUCCESS)
 			goto MFS_ISC_UPDATE_FINISH;
-
-		ret = firmware_verify(MELFAS_binary_G1F);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_UPDATE_FINISH;
-
-		MFS_TSP_reboot();
-		printk(KERN_ERR "<MELFAS> FIRMWARE_UPDATE_FINISHED!!!\n\n");
-		ret = check_firmware_version(MELFAS_binary_G1F);
-
-		}
-
-	else {
-		ret = check_module_compatibility(MELFAS_binary);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_UPDATE_FINISH;
-
-		ret = check_firmware_version(MELFAS_binary);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_UPDATE_FINISH;
-
-		MFS_TSP_reboot();
-
-		ret = mass_erase();
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_UPDATE_FINISH;
-
-		ret = firmware_write(MELFAS_binary);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_UPDATE_FINISH;
-
-		MFS_TSP_reboot();
-		printk(KERN_ERR "<MELFAS> TOUCH IC REBOOT!!!\n");
-
-		ret = enter_ISC_mode();
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_UPDATE_FINISH;
-
-		ret = firmware_verify(MELFAS_binary);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_UPDATE_FINISH;
-
-		MFS_TSP_reboot();
-		printk(KERN_ERR "<MELFAS> FIRMWARE_UPDATE_FINISHED!!!\n\n");
-		ret = check_firmware_version(MELFAS_binary);
-		}
-
-
-	printk(KERN_ERR "<MELFAS> TSP_PanelVersion=%2x\n", TSP_PanelVersion);
-	printk(KERN_ERR "<MELFAS> TSP_PhoneVersion=%2x\n", TSP_PhoneVersion);
-
-	MFS_ISC_UPDATE_FINISH:
-
-	MFS_I2C_set_slave_addr(mfs_i2c_slave_addr);
-	return ret;
-}
-
-eMFSRet_t MFS_ISC_force_update(void)
-{
-	eMFSRet_t ret;
-
-	MFS_I2C_set_slave_addr(mfs_i2c_slave_addr);
-
-	MFS_TSP_reboot();
-
-	if (IC_type == 0x0F ) {
-		ret = mass_erase();
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_force_update_FINISH;
-
-		ret = firmware_write(MELFAS_binary_G1F);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_force_update_FINISH;
-
-		MFS_TSP_reboot();
-		printk(KERN_ERR "<MELFAS> TOUCH IC REBOOT!!!\n");
-
-		ret = enter_ISC_mode();
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_force_update_FINISH;
-
-		ret = firmware_verify(MELFAS_binary_G1F);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_force_update_FINISH;
-
-		MFS_TSP_reboot();
-		printk(KERN_ERR "<MELFAS> FIRMWARE_UPDATE_FINISHED!!!\n\n");
-		ret = check_firmware_version(MELFAS_binary_G1F);
-	}
-	
-	else {	
-		ret = mass_erase();
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_force_update_FINISH;
-
-		ret = firmware_write(MELFAS_binary);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_force_update_FINISH;
-
-		MFS_TSP_reboot();
-		printk(KERN_ERR "<MELFAS> TOUCH IC REBOOT!!!\n");
-
-		ret = enter_ISC_mode();
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_force_update_FINISH;
-
-		ret = firmware_verify(MELFAS_binary);
-		if (ret != MRET_SUCCESS)
-			goto MFS_ISC_force_update_FINISH;
-
-		MFS_TSP_reboot();
-
-		ret = check_firmware_version(MELFAS_binary);
-	}
-		printk(KERN_ERR "<MELFAS> TSP_PanelVersion=%2x\n", TSP_PanelVersion);
-		printk(KERN_ERR "<MELFAS> TSP_PhoneVersion=%2x\n", TSP_PhoneVersion);
-
-		printk(KERN_ERR "<MELFAS> FIRMWARE_UPDATE_FINISHED!!!\n\n");
-
-MFS_ISC_force_update_FINISH:
-
-	MFS_I2C_set_slave_addr(mfs_i2c_slave_addr);
-	return ret;
-}
-
-eMFSRet_t check_module_type(void)
-{
-	unsigned char read_buffer;
-	unsigned char moduleComp;
-	printk(KERN_ERR "<MELFAS> enter_check_module_type_function!!!\n\n");
-
-	melfas_fw_i2c_read(0x1F, &read_buffer, 1);
-	moduleComp = read_buffer;
-	printk(KERN_ERR "<MELFAS> Module Type=%x\n",
-		moduleComp);
-
-	if (moduleComp == 0x46) {
-		printk(KERN_ERR "<MELFAS> G1F type detected!!!\n\n");
-		IC_type = 0x0F;
-		return MRET_SUCCESS;
-	}
-
-	else if (moduleComp == 0x4D) {
-		printk(KERN_ERR "<MELFAS> G1M type detected!!!\n\n");
-		IC_type = 0x0D;
-		return MRET_SUCCESS;
-	} else
-		return MRET_CHECK_IC_TYPE_ERROR;
-}
-eMFSRet_t check_module_compatibility(const unsigned char *_pBinary_Data)
-{
-	unsigned char write_buffer, read_buffer;
-	unsigned char moduleComp, setComp;
-	printk(KERN_ERR "<MELFAS> Check Module Compatibility\n");
-
-	melfas_fw_i2c_read(MODULE_COMPATIBILITY_ADDR, &read_buffer, 1);
-	moduleComp = read_buffer;
-	printk(KERN_ERR "<MELFAS> Module Compatibility moduleComp=%x\n",
-		moduleComp);
-	setComp = _pBinary_Data[SET_COMPATIBILITY_ADDR];
-	setComp = setComp - 55;
-#ifdef CONFIG_MACH_KYLE_I	
-	setComp = 0x03;	/* HW rev R03 */
 #endif
-	printk(KERN_ERR "<MELFAS> Module Compatibility setComp=%x\n", setComp);
 
-	if (moduleComp == setComp  || moduleComp == 0xE0 || moduleComp == 0x52)
-		return MRET_SUCCESS;
-	else if (IC_type == 0x0F && moduleComp != setComp) {
-		exception_condition = true;
-		return MRET_SUCCESS;
+		MFS_TSP_reboot();
+		redownload = 1;
+		goto ENTRANCE;
+	}
+	else if (ret != MRET_SUCCESS)
+	{
+		goto MFS_ISC_UPDATE_FINISH;
+	}
+
+	if(paneltype == 0x4d)
+	{
+		buf = &G1M_BINARY;
+		printk(KERN_ERR "<MELFAS> buf_G1M\n");
+	}
+	else if(paneltype == 0x46)
+	{
+		buf =& G1F_BINARY;
+		printk(KERN_ERR "<MELFAS> buf_G1F\n");
+	}
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2
+	else if(paneltype == 0x58)
+	{
+		buf =& G2_BINARY;
+		printk(KERN_ERR "<MELFAS> buf_G2\n");
+		//goto MFS_ISC_UPDATE_FINISH;
+	}
+#endif
+#endif
+
+	// TSP HW Revision
+	if( get_tsp_compatibility(&tspcomp) != MRET_SUCCESS)
+		goto MFS_ISC_UPDATE_FINISH;
+
+
+	printk(KERN_ERR "<MELFAS> paneltype=%c\n", paneltype);
+	printk(KERN_ERR "<MELFAS> tspcomp=%x\n", tspcomp);
+#if defined(CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2)
+	if((paneltype == 0x4d && tspcomp > 0x0E) 
+		|| (paneltype == 0x46 && ( tspcomp < 0x0F || tspcomp > 0x14 )) 
+		|| (paneltype == 0x58 && ( tspcomp < 0x15 || tspcomp > 0x19 )) )
+#else
+	if((paneltype == 0x4d && tspcomp > 0x0E) || (paneltype == 0x46 && tspcomp <= 0x0E))
+#endif
+		goto START_DOWNLOAD;
+
+	get_main_compatibility(buf, &setcomp);
+
+#ifdef CONFIG_MACH_KYLE_I
+	setcomp = TSP_SET_COMP;
+	printk(KERN_ERR "<MELFAS> setcomp=%x\n", setcomp);
+	printk(KERN_ERR "<MELFAS> tspcomp=%x\n", tspcomp);
+	if(tspcomp != setcomp){
+		goto MFS_ISC_UPDATE_FINISH;		
+	}
+#else
+#if defined(CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2)
+	if( paneltype == 0x58 )
+	{
+		setcomp = TSP_SET_COMP_G2;
+		printk(KERN_ERR "<MELFAS> setcomp=%x\n", setcomp);
+		printk(KERN_ERR "<MELFAS> tspcomp=%x\n", tspcomp);
+		if(tspcomp != setcomp)
+			goto MFS_ISC_UPDATE_FINISH;
 	}
 	else
-		return MRET_CHECK_COMPATIBILITY_ERROR;
+#endif		
+	{
+		printk(KERN_ERR "<MELFAS> setcomp=%c\n", setcomp);
+		printk(KERN_ERR "<MELFAS> tspcomp=%x\n", tspcomp);	
+		if(tspcomp != (setcomp-55))
+			goto MFS_ISC_UPDATE_FINISH;
+	}
+#endif
+
+	if (check_firmware_version(0, buf) != MRET_SUCCESS)
+		goto MFS_ISC_UPDATE_FINISH;
+
+START_DOWNLOAD:
+	if (mass_erase() != MRET_SUCCESS)
+		goto MFS_ISC_UPDATE_FINISH;
+
+	ret = firmware_write(buf);
+	if (ret != MRET_SUCCESS)
+		goto MFS_ISC_UPDATE_FINISH;
+
+	MFS_TSP_reboot();
+	printk(KERN_ERR "<MELFAS> TOUCH IC REBOOT!!!\n");
+	
+	if (enter_ISC_mode() != MRET_SUCCESS)
+		goto MFS_ISC_UPDATE_FINISH;
+
+	if (firmware_verify(buf) != MRET_SUCCESS)
+		goto MFS_ISC_UPDATE_FINISH;
+
+	printk(KERN_ERR "<MELFAS> FIRMWARE_UPDATE_FINISHED!!!\n\n");
+
+MFS_ISC_UPDATE_FINISH:
+
+	MFS_TSP_reboot();
+	printk(KERN_ERR "<MELFAS> TOUCH IC REBOOT2!!!\n");
+	check_firmware_version(1, buf);
+
+	MFS_I2C_set_slave_addr(mfs_i2c_slave_addr);
+
+	return ret;
 }
 
+eMFSRet_t check_panel_type(unsigned char* paneltype)
+{
+	eMFSRet_t ret;
+	unsigned char read_buffer, cnt = 0;
+	printk(KERN_ERR "<MELFAS> Check Panel Type\n");
 
-eMFSRet_t check_firmware_version(const unsigned char *_pBinary_Data)
+	do
+	{
+		if (cnt++ > 3)
+			return MRET_PANEL_TYPE_ERROR;
+		
+		if (!melfas_fw_i2c_read(0x1F, &read_buffer, 1))
+			return MRET_I2C_ERROR;
+
+		*paneltype = read_buffer;
+		MFS_ms_delay(5);
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2
+	}while(read_buffer != 0x46 && read_buffer != 0x4d && read_buffer != 0x58);
+#else
+	}while(read_buffer != 0x46 && read_buffer != 0x4d);
+#endif
+
+	printk(KERN_ERR "<MELFAS> read_buffer_value=%c\n", read_buffer);
+
+	if (read_buffer == 0x4d)
+		IC_type = 0x0D;
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2
+	else if (read_buffer == 0x58)
+		IC_type = 0x0C;		
+#endif
+	else 
+		IC_type = 0x0F;
+	
+
+		return MRET_SUCCESS;
+}
+
+eMFSRet_t get_tsp_compatibility(unsigned char* tspcomp)
+{
+	unsigned char write_buffer, read_buffer;
+	unsigned char moduleComp;
+	printk(KERN_ERR "<MELFAS> Get TSP Compatibility\n");
+
+	if (!melfas_fw_i2c_read(MODULE_COMPATIBILITY_ADDR, &read_buffer, 1))
+		return MRET_I2C_ERROR;
+
+	*tspcomp = read_buffer;
+	return MRET_SUCCESS;
+}
+
+eMFSRet_t get_main_compatibility(const unsigned char *_pBinary_Data, unsigned char* maincomp)
+{
+	printk(KERN_ERR"<MELFAS> Get main Compatibility\n");
+	
+	*maincomp = _pBinary_Data[SET_COMPATIBILITY_ADDR];
+	
+	return MRET_SUCCESS;
+}
+
+eMFSRet_t check_firmware_version(bool only_read, const unsigned char *_pBinary_Data)
 {
 	unsigned char write_buffer, read_buffer;
 	unsigned char moduleVersion, setVersion;
@@ -305,17 +292,50 @@ eMFSRet_t check_firmware_version(const unsigned char *_pBinary_Data)
 
 	moduleVersion = read_buffer;
 	setVersion = _pBinary_Data[SET_VERSION_ADDR];
-#ifdef CONFIG_MACH_KYLE_I
-	setVersion = 0x18;		/* kylei white panel R03 */
-#endif	
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2
+	if( IC_type == 0x0C )
+		setVersion = TSP_SET_VERSION_G2;
+#endif
 	TSP_PanelVersion = moduleVersion;
 	TSP_PhoneVersion = setVersion;
+	printk(KERN_ERR "<MELFAS> TSP_PanelVersion=%2x\n", TSP_PanelVersion);
+	printk(KERN_ERR "<MELFAS> TSP_PhoneVersion=%2x\n", TSP_PhoneVersion);
+	if (only_read)
+		return MRET_CHECK_VERSION_ERROR;
+	
+#ifdef CONFIG_MACH_KYLE_I
+	setVersion = TSP_SET_VERSION;	/* temp. kylei CU white panel R03 */
+	TSP_PhoneVersion = setVersion;
+#endif
 
 	if (moduleVersion < setVersion)
 		return MRET_SUCCESS;
-	else if (exception_condition == true) {
-		exception_condition = false;
-		return MRET_SUCCESS;
+	else if (moduleVersion == setVersion)
+	{
+		printk(KERN_ERR "<MELFAS> Get CRC\n");	
+
+		do
+		{
+		if (!melfas_fw_i2c_read(CRC_DONE_ADDR, &read_buffer, 1))
+			return MRET_I2C_ERROR;
+		} while (read_buffer != 0xAA);
+
+		if (!melfas_fw_i2c_read(CRC_ADDR, &read_buffer, 1))
+			return MRET_I2C_ERROR;
+
+		printk(KERN_ERR "<MELFAS> IC_type=%x\n", IC_type);
+		printk(KERN_ERR "<MELFAS> read_buffer=%d\n", read_buffer);
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2
+		if ((IC_type == 0x0D && read_buffer != G1M_V34_CRC) || (IC_type == 0x0F && read_buffer != G1F_V22_CRC) || (IC_type == 0x0C && read_buffer != G2_VA1_CRC))
+#else
+		if ((IC_type == 0x0D && read_buffer != G1M_V34_CRC) || (IC_type == 0x0F && read_buffer != G1F_V22_CRC))
+#endif
+			return MRET_SUCCESS;
+		else
+		{
+			printk(KERN_ERR "<MELFAS> Same_firmware_version_CRC_pass_Do not need to download\n\n");
+			return MRET_CHECK_VERSION_ERROR;
+		}
 	}
 	else {
 		printk(KERN_ERR "Do not need to download\n\n");
@@ -342,7 +362,7 @@ int firmware_write(const unsigned char *_pBinary_Data)
 #define CLENGTH 4
 	int i, lStartAddr = 0, lCnt = 0;
 
-
+	printk(KERN_ERR "<MELFAS> firmware_write start !!!\n");
 	while (lStartAddr*CLENGTH < 20*1024) {
 		g_write_buffer[0] = ISC_CMD_ISC_ADDR;
 		g_write_buffer[1] = (char)(lStartAddr & 0xFF);

@@ -339,7 +339,7 @@ static inline void set_squelch_level(struct msm_otg *dev)
 
 	res = ulpi_read(dev, ULPI_CONFIG_REG4);
 	res &= ~ULPI_SQUELCH_LEVEL_MASK;
-	res |= SQUELCH_LEVEL_2;
+	res |= SQUELCH_LEVEL_1;
 	ulpi_write(dev, res, ULPI_CONFIG_REG4);
 }
 #endif
@@ -1610,7 +1610,7 @@ reset_link:
 	set_cdr_auto_reset(dev);
 	set_driver_amplitude(dev);
 	set_se1_gating(dev);
-	#ifdef CONFIG_MACH_AMAZING_CDMA
+	#if defined(CONFIG_MACH_AMAZING_CDMA) || defined(CONFIG_MACH_KYLE_I)
 	set_squelch_level(dev);
 	#endif
 	writel(0x0, USB_AHB_BURST);

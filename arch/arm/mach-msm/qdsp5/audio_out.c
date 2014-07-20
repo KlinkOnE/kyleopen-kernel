@@ -92,7 +92,9 @@ module_init(_pcm_log_init);
 
 
 
-#define BUFSZ (960 * 5)
+//#define BUFSZ (960 * 5)
+#define BUFSZ ((960 * 5)*2)//[SGMC][rh.wang] [S7562 HKTW] enlarge buffer for mp3 play simetimes break problem
+
 #define DMASZ (BUFSZ * 2)
 
 #define COMMON_OBJ_ID 6

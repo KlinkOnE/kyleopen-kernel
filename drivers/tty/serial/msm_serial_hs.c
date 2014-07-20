@@ -1529,6 +1529,13 @@ static irqreturn_t msm_hs_isr(int irq, void *dev)
 	sr_status = msm_hs_read(uport, UARTDM_SR_ADDR);
 	pHSLogData[nNextLogIdx].sr_status = sr_status;
 
+	/* extra check for spurious msm_hs_isr */
+	if(!isr_status) {
+		pr_err("%s(): try to unlock msm_hs_isr", __func__);
+		spin_unlock_irqrestore(&uport->lock, flags);
+		return IRQ_HANDLED;
+	}
+
 	/*Adding this line for using overrun workaround*/
 	if (sr_status & UARTDM_SR_OVERRUN_BMSK) {
 		buf_overrun++;

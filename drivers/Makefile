@@ -123,10 +123,8 @@ obj-y				+= platform/
 obj-y				+= ieee802154/
 #common clk code
 obj-y				+= clk/
-obj-y                           +=sensors/ 
+obj-y                           += sensors/ 
 
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
 obj-$(CONFIG_DPRAM)             += dpram/
-ifeq (1, $(shell if [ -d ../../../../../../kernel/drivers/exfat ] ; then echo 1 ; fi))
-obj-y                           += exfat/
-endif
+obj-y 				+= exfat/

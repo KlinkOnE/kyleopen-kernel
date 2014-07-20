@@ -75,10 +75,12 @@ void MFS_TSP_reboot(void)
 	ts_power_control(1);
 	MFS_ms_delay(300);
 #else
+	gpio_request(TSP_PWR_LDO_GPIO, "tsp-power");
 	MFS_ms_delay(50);
 	gpio_direction_output(TSP_PWR_LDO_GPIO, 0);
 	MFS_ms_delay(1000);
 	gpio_direction_output(TSP_PWR_LDO_GPIO, 1);
 	MFS_ms_delay(300);
+	gpio_free(TSP_PWR_LDO_GPIO);
 #endif
 }

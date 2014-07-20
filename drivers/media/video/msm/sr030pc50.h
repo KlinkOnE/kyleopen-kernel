@@ -1046,6 +1046,7 @@ static const u16 sr030pc50_snapshot[] = {
 static const u16 sr030pc50_snapshot_X_Flip[] = {
 	0x0300,
 	0x1191, /*B[0]_horizontal flip funtion(0:off,1:on)*/
+	0xff0a,
 };
 
 static const u16 sr030pc50_snapshot_Y_Flip[] = {

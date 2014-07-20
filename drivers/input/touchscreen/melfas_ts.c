@@ -3260,6 +3260,10 @@ static int melfas_ts_probe(struct i2c_client *client, const struct i2c_device_id
 	ts->noise_mode = 0;
 	if (IC_type == 0x0F)
 		ts->config_fw_version = "S7562_0526_G1F";
+#ifdef CONFIG_TOUCHSCREEN_MELFAS_KYLE_G2
+	else if (IC_type == 0x0C)
+		ts->config_fw_version = "S7562_0526_G2";		
+#endif
 	else{
 		ts->config_fw_version = "S7562_0526_G1M";
 		#ifdef CONFIG_MACH_KYLE_I		
@@ -3476,7 +3480,7 @@ static int melfas_ts_resume(struct i2c_client *client)
 	msleep(50);
 	mms_set_noise_mode(ts);
 	tsp_enabled = true;
-	printk(KERN_ERR "[TSP] %s enable IRQ( %d)\n", __func__, __LINE__);
+	printk(KERN_ERR "[TSP] %s enable IRQ( %d) FW:0x%x\n", __func__, __LINE__,TSP_PanelVersion);
 	enable_irq(client->irq);
 #if 0
 	if (ts->read_ta_status) {

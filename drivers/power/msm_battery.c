@@ -780,6 +780,7 @@ static int msm_batt_driver_init;
 static int msm_batt_unhandled_interrupt;
 
 #if defined(CONFIG_MACH_KYLE)
+static DEFINE_SPINLOCK(batt_lock);
 int msm_batt_progress;
 #endif
 
@@ -1556,8 +1557,15 @@ static void msm_batt_set_cable_bt(struct work_struct *work)
 		wake_lock(&vbus_wake_lock);
 
 		if (chg->ovp_status == 1) {
+#if defined(CONFIG_MACH_KYLE_I)
+			msm_batt_info.batt_health = 
+				POWER_SUPPLY_HEALTH_OVERVOLTAGE;
 			msm_batt_info.batt_status =
-			POWER_SUPPLY_STATUS_NOT_CHARGING;
+				POWER_SUPPLY_STATUS_DISCHARGING;
+#else
+			msm_batt_info.batt_status =
+				POWER_SUPPLY_STATUS_NOT_CHARGING;
+#endif
 			msm_batt_info.batt_full_check = 0;
 			msm_batt_info.batt_recharging = 0;
 			if (charging_boot == 1) {
@@ -3027,6 +3035,7 @@ static void msm_batt_update_psy_status(void)
 #ifndef DEBUG
 	if (msm_batt_info.charging_source != NO_CHG) {
 #endif
+		#if !defined(CONFIG_MACH_KYLE)
 		pr_info("[BATT] %s: charger_status= %d, charger_type= %d,"
 			"battery_status=%d, battery_temp_adc=%d,"
 			"chg_current=%d, battery_temp=%d, health %d, "
@@ -3039,6 +3048,7 @@ static void msm_batt_update_psy_status(void)
 			msm_batt_info.battery_temp_adc,
 			msm_batt_info.batt_health,
 			msm_batt_info.batt_status);
+		#endif
 #ifndef DEBUG
 	}
 #endif
@@ -3596,6 +3606,11 @@ static int msm_batt_cleanup(void)
 {
 	int rc = 0;
 
+#if defined(CONFIG_MACH_KYLE)
+	spin_lock(&batt_lock);
+	msm_batt_progress = 1;
+#endif
+
 	pr_info("[BATT] %s\n", __func__);
 
 	if (msm_batt_info.pdata->register_callbacks)
@@ -3616,10 +3631,6 @@ static int msm_batt_cleanup(void)
 	}
 
 	msm_batt_info.batt_handle = INVALID_BATT_HANDLE;
-
-#if defined(CONFIG_MACH_KYLE)
-	msm_batt_progress = 1;
-#endif
 
 	if (msm_batt_info.batt_client)
 		msm_rpc_unregister_client(msm_batt_info.batt_client);
@@ -3646,6 +3657,7 @@ static int msm_batt_cleanup(void)
 #endif
 
 #if defined(CONFIG_MACH_KYLE)
+	spin_unlock(&batt_lock);
 	msm_batt_progress = 0;
 #endif
 

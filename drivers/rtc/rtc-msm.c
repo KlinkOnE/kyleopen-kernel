@@ -334,6 +334,10 @@ msmrtc_timeremote_read_time(struct device *dev, struct rtc_time *tm)
 	int rc;
 	struct rtc_tod_args rtc_args;
 	struct msm_rtc *rtc_pdata = dev_get_drvdata(dev);
+#if defined(CONFIG_MACH_KYLE) || defined(CONFIG_MACH_KYLE_I) || defined(CONFIG_MACH_KYLE_CHN)
+	unsigned long sec_tmp = 0;
+#endif
+
 #ifdef BOOTALARM_DEBUG
 	static int once = 1;
 	struct rtc_wkalrm bootalarm;
@@ -353,11 +357,19 @@ msmrtc_timeremote_read_time(struct device *dev, struct rtc_time *tm)
 				TIMEREMOTE_PROCEEDURE_GET_JULIAN,
 				msmrtc_tod_proc_args, &rtc_args,
 				msmrtc_tod_proc_result, &rtc_args, -1);
-
+	
 	if (rc) {
 		dev_err(dev, "%s: Error retrieving rtc (TOD) time\n", __func__);
 		return rc;
 	}
+
+#if defined(CONFIG_MACH_KYLE) || defined(CONFIG_MACH_KYLE_I) || defined(CONFIG_MACH_KYLE_CHN)
+	rtc_tm_to_time(rtc_args.tm, &sec_tmp);
+	printk("%s [RTC] sec =  %ld \n", __func__, sec_tmp);
+	printk("%s [RTC] %d-%d-%d %d:%d:%d\n",__func__,rtc_args.tm->tm_year + 1900, rtc_args.tm->tm_mon + 1,
+					 rtc_args.tm->tm_mday, rtc_args.tm->tm_hour,
+					 rtc_args.tm->tm_min, rtc_args.tm->tm_sec);
+#endif
 
 	return 0;
 }
@@ -888,10 +900,12 @@ msmrtc_suspend(struct platform_device *dev, pm_message_t state)
 			return 0;
 		}
 		rtc_time_to_tm(rtc_pdata->rtcalarm_time, &tm);
+		#if !defined(CONFIG_MACH_KYLE)
 		pr_info("%s: wakeup alarm set to "
 				"%d-%02d-%02d %02d:%02d:%02d UTC\n", __func__,
 				tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
 				tm.tm_hour, tm.tm_min, tm.tm_sec);
+		#endif
 		msm_pm_set_max_sleep_time((int64_t)
 			((int64_t) diff * NSEC_PER_SEC));
 	} else

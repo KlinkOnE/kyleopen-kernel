@@ -310,7 +310,7 @@ int ath6kl_control_tx(void *devt, struct sk_buff *skb,
 			cfg80211_priv_event(vif->ndev, "HANG", GFP_ATOMIC);
 
 	} else
-		cookie = ath6kl_alloc_cookie(ar);
+		cookie = ath6kl_alloc_cookie(ar, eid == ar->ctrl_ep);
 
 	if (cookie == NULL) {
 		spin_unlock_bh(&ar->lock);
@@ -462,7 +462,7 @@ int ath6kl_data_tx(struct sk_buff *skb, struct net_device *dev)
 	}
 
 	/* allocate resource for this packet */
-	cookie = ath6kl_alloc_cookie(ar);
+	cookie = ath6kl_alloc_cookie(ar, eid == ar->ctrl_ep);
 
 	if (!cookie) {
 		spin_unlock_bh(&ar->lock);
@@ -701,21 +701,28 @@ void ath6kl_tx_complete(void *context, struct list_head *packet_queue)
 		list_del(&packet->list);
 
 		ath6kl_cookie = (struct ath6kl_cookie *)packet->pkt_cntxt;
-		if (!ath6kl_cookie)
-			goto fatal;
+		if (WARN_ON_ONCE(!ath6kl_cookie))
+			continue;
 
 		status = packet->status;
 		skb = ath6kl_cookie->skb;
 		eid = packet->endpoint;
 		map_no = ath6kl_cookie->map_no;
 
-		if (!skb || !skb->data)
-			goto fatal;
+		if (WARN_ON_ONCE(!skb || !skb->data)) {
+			dev_kfree_skb(skb);
+			ath6kl_free_cookie(ar, ath6kl_cookie,
+					   eid == ar->ctrl_ep);
+			continue;
+		}
 
 		__skb_queue_tail(&skb_queue, skb);
 
-		if (!status && (packet->act_len != skb->len))
-			goto fatal;
+		if (WARN_ON_ONCE(!status && (packet->act_len != skb->len))) {
+			ath6kl_free_cookie(ar, ath6kl_cookie,
+					   eid == ar->ctrl_ep);
+			continue;
+		}
 
 		ar->tx_pending[eid]--;
 
@@ -740,7 +747,8 @@ void ath6kl_tx_complete(void *context, struct list_head *packet_queue)
 
 		vif = ath6kl_get_vif_by_index(ar, if_idx);
 		if (!vif) {
-			ath6kl_free_cookie(ar, ath6kl_cookie);
+			ath6kl_free_cookie(ar, ath6kl_cookie,
+			   eid == ar->ctrl_ep);
 			continue;
 		}
 
@@ -771,7 +779,7 @@ void ath6kl_tx_complete(void *context, struct list_head *packet_queue)
 
 		ath6kl_tx_clear_node_map(vif, eid, map_no);
 
-		ath6kl_free_cookie(ar, ath6kl_cookie);
+		ath6kl_free_cookie(ar, ath6kl_cookie, eid == ar->ctrl_ep);
 
 		if (test_bit(NETQ_STOPPED, &vif->flags))
 			clear_bit(NETQ_STOPPED, &vif->flags);
@@ -796,11 +804,6 @@ void ath6kl_tx_complete(void *context, struct list_head *packet_queue)
 	if (wake_event)
 		wake_up(&ar->event_wq);
 
-	return;
-
-fatal:
-	WARN_ON(1);
-	spin_unlock_bh(&ar->lock);
 	return;
 }
 

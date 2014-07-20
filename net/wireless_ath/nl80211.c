@@ -5885,10 +5885,14 @@ static int nl80211_set_wowlan(struct sk_buff *skb, struct genl_info *info)
 		}
 		cfg80211_rdev_free_wowlan(rdev);
 		rdev->wowlan = ntrig;
+		if (rdev->ops->set_wow_mode)
+			rdev->ops->set_wow_mode(&rdev->wiphy, ntrig);
 	} else {
  no_triggers:
 		cfg80211_rdev_free_wowlan(rdev);
 		rdev->wowlan = NULL;
+		if (rdev->ops->clr_wow_mode)
+			rdev->ops->clr_wow_mode(&rdev->wiphy);
 	}
 
 	return 0;

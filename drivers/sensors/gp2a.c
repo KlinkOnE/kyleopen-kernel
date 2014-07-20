@@ -69,8 +69,13 @@
 #define PROX_NONDETECT	0x40
 #define PROX_DETECT		0x20
 #elif defined(CONFIG_MACH_KYLE_I)
-#define PROX_NONDETECT	0x2F
-#define PROX_DETECT		0x0F
+/*B1.5 MODE*/
+//#define PROX_NONDETECT	0x2F
+//#define PROX_DETECT		0x0F
+
+/*B1 MODE*/
+#define PROX_NONDETECT	0x40
+#define PROX_DETECT		0x20
 #elif defined(CONFIG_MACH_KYLE)
 #define PROX_NONDETECT	0x40
 #define PROX_DETECT		0x20
@@ -234,7 +239,7 @@ int gp2a_cal_mode_read_file(char *mode)
 		return err;
 	}
 	err = cal_mode_filp->f_op->read(cal_mode_filp,
-		(char *)&mode,
+		(char *)mode,
 		sizeof(u8), &cal_mode_filp->f_pos);
 
 	if (err != sizeof(u8)) {

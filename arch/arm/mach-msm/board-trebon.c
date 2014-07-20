@@ -1392,7 +1392,9 @@ static int msm_sdcc_setup_vreg(int dev_id, unsigned int enable)
 
 	curr = &sdcc_vreg_data[dev_id - 1];
 
+	#if !defined(CONFIG_MACH_KYLE)
 	printk("%s : %d : %d : level : %d\n", __func__, dev_id, enable, curr->level);
+	#endif
 
 	if (!(test_bit(dev_id, &vreg_sts)^enable))
 		return rc;

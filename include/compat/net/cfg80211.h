@@ -1645,6 +1645,12 @@ struct cfg80211_ops {
 
 	int	(*notify_btcoex)(struct wiphy *wiphy,
 					   u8 *buf, int len);
+
+	int     (*set_wow_mode)(struct wiphy *wiphy,
+				struct cfg80211_wowlan *wow);
+
+	int     (*clr_wow_mode)(struct wiphy *wiphy);
+
 	int	(*notify_p2p_flush)(struct wiphy *wiphy);
 };
 

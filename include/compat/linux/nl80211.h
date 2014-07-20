@@ -543,9 +543,6 @@
  *	OLBC handling in hostapd. Beacons are reported in %NL80211_CMD_FRAME
  *	messages. Note that per PHY only one application may register.
  *
- * @NL80211_CMD_SET_NOACK_MAP: sets a bitmap for the individual TIDs whether
- *      No Acknowledgement Policy should be applied.
- *
  * @NL80211_CMD_CH_SWITCH_NOTIFY: An AP or GO may decide to switch channels
  *	independently of the userspace SME, send this event indicating
  *	%NL80211_ATTR_IFINDEX is now on %NL80211_ATTR_WIPHY_FREQ with
@@ -579,10 +576,9 @@ enum nl80211_commands {
 
 	NL80211_CMD_GET_BEACON,
 	NL80211_CMD_SET_BEACON,
-	NL80211_CMD_START_AP,
-	NL80211_CMD_NEW_BEACON = NL80211_CMD_START_AP,
-	NL80211_CMD_STOP_AP,
-	NL80211_CMD_DEL_BEACON = NL80211_CMD_STOP_AP,
+	NL80211_CMD_NEW_BEACON,
+	NL80211_CMD_DEL_BEACON,
+
 
 	NL80211_CMD_GET_STATION,
 	NL80211_CMD_SET_STATION,

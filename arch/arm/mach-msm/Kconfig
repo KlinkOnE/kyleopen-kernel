@@ -452,7 +452,15 @@ config MACH_KYLE_CHN
         bool "MSM7x27A KYLE-CHN"
         help
           Support for the Qualcomm KYLE-CHN
-		  
+
+config MACH_KYLE_HKTW
+        depends on !MSM_STACKED_MEMORY
+	select DISABLE_HDMI_FB_CLEAR
+        default n
+        bool "MSM7x27A KYLE-HKTW"
+        help
+          Support for the Qualcomm KYLE-HKTW
+	  
 config MACH_KYLE_I
         depends on !MSM_STACKED_MEMORY
 	select DISABLE_HDMI_FB_CLEAR

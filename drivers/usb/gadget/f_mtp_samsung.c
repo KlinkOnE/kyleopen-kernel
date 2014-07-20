@@ -1192,8 +1192,9 @@ mtpg_function_unbind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct mtpg_dev	*dev = mtpg_func_to_dev(f);
 	struct usb_request *req;
-
+	#if !defined(CONFIG_MACH_KYLE)
 	printk(KERN_DEBUG "[%s]\tline = [%d]\n", __func__, __LINE__);
+	#endif
 
 	while ((req = mtpg_req_get(dev, &dev->rx_idle)))
 		mtpg_request_free(req, dev->bulk_out);

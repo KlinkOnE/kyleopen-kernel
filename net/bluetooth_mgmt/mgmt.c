@@ -3006,6 +3006,8 @@ int mgmt_connectable(struct hci_dev *hdev, u8 connectable)
 	int ret;
 
 #ifdef WLAN_33V_CONTROL_FOR_BT_ANTENNA
+    BT_INFO("mgmt_connectable[connectable=%d]", connectable);
+    
 	if (connectable == 0)
 		schedule_work(&setup_33v_disable);
 	else
