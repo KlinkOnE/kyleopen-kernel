@@ -418,7 +418,6 @@ static ssize_t store_scaling_max_freq
 		else if (value >= MIN_FREQ_LIMIT)
 			set_freq_limit(DVFS_THERMALD_ID, value);
 	}
-
 	return count;
 }
 #else
