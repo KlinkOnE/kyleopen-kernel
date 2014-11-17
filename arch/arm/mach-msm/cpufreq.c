@@ -236,9 +236,7 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 	}
 #ifdef CONFIG_MSM_CPU_FREQ_SET_MIN_MAX
 	policy->min = CONFIG_MSM_CPU_FREQ_MIN;
-        // Always boot with safe/nominal speed.
-        // User settings will come overide that once system is up and running...
-	policy->max = 1008000;
+	policy->max = CONFIG_MSM_CPU_FREQ_MAX;
 #endif
 
 	cur_freq = acpuclk_get_rate(policy->cpu);
