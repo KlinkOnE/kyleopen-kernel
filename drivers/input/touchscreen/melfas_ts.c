@@ -72,11 +72,11 @@
 #define TS_READ_REGS_LEN		5
 #define TS_WRITE_REGS_LEN		16
 #endif
-#ifdef CONFIG_SEC_DVFS
-#define TOUCH_BOOSTER			1
-#define TOUCH_BOOSTER_OFF_TIME	100
-#define TOUCH_BOOSTER_CHG_TIME	200
-#endif
+//#ifdef CONFIG_SEC_DVFS
+//#define TOUCH_BOOSTER			1
+//#define TOUCH_BOOSTER_OFF_TIME	100
+//#define TOUCH_BOOSTER_CHG_TIME	200
+//#endif
 #define TS_READ_REGS_LEN		66
 #define MELFAS_MAX_TOUCH		5
 static int FW_VERSION;
