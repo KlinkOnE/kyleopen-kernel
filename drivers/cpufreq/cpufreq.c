@@ -583,35 +583,101 @@ static ssize_t show_scaling_setspeed(struct cpufreq_policy *policy, char *buf)
 	return policy->governor->show_setspeed(policy, buf);
 }
 
-/**
- * show_scaling_driver - show the current cpufreq HW/BIOS limitation
- */
-static ssize_t show_bios_limit(struct cpufreq_policy *policy, char *buf)
+#ifdef CONFIG_CPU_FREQ_VDD_LEVELS
+
+extern ssize_t acpuclk_get_vdd_levels_str(char *buf);
+static ssize_t show_vdd_levels(struct cpufreq_policy *policy, char *buf)
 {
-	unsigned int limit;
-	int ret;
-	if (cpufreq_driver->bios_limit) {
-		ret = cpufreq_driver->bios_limit(policy->cpu, &limit);
-		if (!ret)
-			return sprintf(buf, "%u\n", limit);
-	}
-	return sprintf(buf, "%u\n", policy->cpuinfo.max_freq);
+	return acpuclk_get_vdd_levels_str(buf);
 }
 
-cpufreq_freq_attr_ro_perm(cpuinfo_cur_freq, 0400);
-cpufreq_freq_attr_ro(cpuinfo_min_freq);
-cpufreq_freq_attr_ro(cpuinfo_max_freq);
-cpufreq_freq_attr_ro(cpuinfo_transition_latency);
-cpufreq_freq_attr_ro(scaling_available_governors);
-cpufreq_freq_attr_ro(scaling_driver);
-cpufreq_freq_attr_ro(scaling_cur_freq);
-cpufreq_freq_attr_ro(bios_limit);
-cpufreq_freq_attr_ro(related_cpus);
-cpufreq_freq_attr_ro(affected_cpus);
-cpufreq_freq_attr_rw(scaling_min_freq);
-cpufreq_freq_attr_rw(scaling_max_freq);
-cpufreq_freq_attr_rw(scaling_governor);
-cpufreq_freq_attr_rw(scaling_setspeed);
+extern void acpuclk_set_vdd(unsigned acpu_khz, int vdd);
+static ssize_t store_vdd_levels(struct cpufreq_policy *policy, const char *buf, size_t count)
+{
+	int i = 0, j;
+	int pair[2] = { 0, 0 };
+	int sign = 0;
+
+	if (count < 1)
+		return 0;
+
+	if (buf[0] == '-')
+	{
+		sign = -1;
+		i++;
+	}
+	else if (buf[0] == '+')
+	{
+		sign = 1;
+		i++;
+	}
+
+	for (j = 0; i < count; i++)
+	{
+		char c = buf[i];
+		if ((c >= '0') && (c <= '9'))
+		{
+			pair[j] *= 10;
+			pair[j] += (c - '0');
+		}
+		else if ((c == ' ') || (c == '\t'))
+		{
+			if (pair[j] != 0)
+			{
+				j++;
+				if ((sign != 0) || (j > 1))
+					break;
+			}
+		}
+		else
+			break;
+	}
+
+	if (sign != 0)
+	{
+		return -EINVAL;
+	}
+	else
+	{
+		if ((pair[0] > 0) && (pair[1] >= 0) && (pair[1] <= 10))
+			acpuclk_set_vdd((unsigned)pair[0], pair[1]);
+		else
+			return -EINVAL;
+	}
+
+	return count;
+}
+
+#endif //CONFIG_CPU_FREQ_VDD_LEVELS
+
+#define define_one_ro(_name) \
+static struct freq_attr _name = \
+__ATTR(_name, 0444, show_##_name, NULL)
+
+#define define_one_ro0400(_name) \
+static struct freq_attr _name = \
+__ATTR(_name, 0400, show_##_name, NULL)
+
+#define define_one_rw(_name) \
+static struct freq_attr _name = \
+__ATTR(_name, 0644, show_##_name, store_##_name)
+
+define_one_ro0400(cpuinfo_cur_freq);
+define_one_ro(cpuinfo_min_freq);
+define_one_ro(cpuinfo_max_freq);
+define_one_ro(cpuinfo_transition_latency);
+define_one_ro(scaling_available_governors);
+define_one_ro(scaling_driver);
+define_one_ro(scaling_cur_freq);
+define_one_ro(related_cpus);
+define_one_ro(affected_cpus);
+define_one_rw(scaling_min_freq);
+define_one_rw(scaling_max_freq);
+define_one_rw(scaling_governor);
+define_one_rw(scaling_setspeed);
+#ifdef CONFIG_CPU_FREQ_VDD_LEVELS
+define_one_rw(vdd_levels);
+#endif //CONFIG_CPU_FREQ_VDD_LEVELS
 
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
@@ -625,6 +691,9 @@ static struct attribute *default_attrs[] = {
 	&scaling_driver.attr,
 	&scaling_available_governors.attr,
 	&scaling_setspeed.attr,
+#ifdef CONFIG_CPU_FREQ_VDD_LEVELS
+	&vdd_levels.attr,
+#endif //CONFIG_CPU_FREQ_VDD_LEVELS
 	NULL
 };
 
@@ -852,11 +921,6 @@ static int cpufreq_add_dev_interface(unsigned int cpu,
 	}
 	if (cpufreq_driver->target) {
 		ret = sysfs_create_file(&policy->kobj, &scaling_cur_freq.attr);
-		if (ret)
-			goto err_out_kobj_put;
-	}
-	if (cpufreq_driver->bios_limit) {
-		ret = sysfs_create_file(&policy->kobj, &bios_limit.attr);
 		if (ret)
 			goto err_out_kobj_put;
 	}

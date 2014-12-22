@@ -785,6 +785,8 @@ static void __init acpuclk_hw_init(void)
 	pr_info("ACPU running at %d KHz\n", speed->a11clk_khz);
 }
 
+
+
 static unsigned long acpuclk_7627_get_rate(int cpu)
 {
 	WARN_ONCE(drv_state.current_speed == NULL,
@@ -1026,6 +1028,40 @@ static int __init acpuclk_7627_init(struct acpuclk_soc_data *soc_data)
 	return 0;
 }
 
+#ifdef CONFIG_CPU_FREQ_VDD_LEVELS
+
+ssize_t acpuclk_get_vdd_levels_str(char *buf) {
+
+	int i, len = 0;
+
+	if (buf) {
+		mutex_lock(&drv_state.lock);
+
+		for (i = 0; acpu_freq_tbl[i].a11clk_khz; i++) {
+			/* updated to use uv required by 7x27 architecture - nAa */
+			if (acpu_freq_tbl[i].use_for_scaling)
+			len += sprintf(buf + len, "%8u: %8d\n", acpu_freq_tbl[i].a11clk_khz, acpu_freq_tbl[i].vdd);
+		}
+
+		mutex_unlock(&drv_state.lock);
+	}
+	return len;
+}
+
+/* updated to use uv required by 7x27 architecture - nAa */
+void acpuclk_set_vdd(unsigned int khz, int vdd_uv) {
+	int i;
+	printk(KERN_ERR"acpuclk_set_vdd khz: %d, vdd_uv: %d\n", khz, vdd_uv);
+	mutex_lock(&drv_state.lock);
+
+	for (i = 0; acpu_freq_tbl[i].a11clk_khz; i++) {
+		if ( acpu_freq_tbl[i].a11clk_khz == khz)
+			acpu_freq_tbl[i].vdd = vdd_uv;
+	}
+
+	mutex_unlock(&drv_state.lock);
+}
+#endif	/* CONFIG_CPU_FREQ_VDD_LEVELS */
 struct acpuclk_soc_data acpuclk_7x27_soc_data __initdata = {
 	.max_speed_delta_khz = 400000,
 	.init = acpuclk_7627_init,
